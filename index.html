@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="ru" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OBD2 Pro Dashboard & Terminal</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        carDark: '#0f172a',
+                        carPanel: '#1e293b',
+                        carAccent: '#22c55e',
+                        carAccentHover: '#16a34a',
+                        carWarning: '#f59e0b',
+                        carDanger: '#ef4444'
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0b0f19;
+            color: #f8fafc;
+        }
+        .font-mono-custom {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        /* Custom scrollbar for terminal */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+        .gauge-ring {
+            transition: stroke-dashoffset 0.3s ease;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between bg-[#0b0f19] text-slate-100 selection:bg-green-500 selection:text-black">
+
+    <!-- Top Navigation Bar -->
+    <header class="bg-carPanel/80 backdrop-blur-md border-b border-slate-800 sticky top-0 z-50 px-4 py-3 shadow-lg">
+        <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+            <div class="flex items-center space-x-3">
+                <div class="bg-green-500/10 p-2 rounded-xl border border-green-500/20 text-green-400">
+                    <i class="fa-solid fa-gauge-high text-2xl"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-lg tracking-wide bg-gradient-to-r from-green-400 to-emerald-500 bg-clip-text text-transparent">ELM327 Web HUD</h1>
+                    <p class="text-xs text-slate-400">OBD-II Bluetooth LE & Terminal</p>
+                </div>
+            </div>
+
+            <!-- Connection Controls & Status -->
+            <div class="flex items-center space-x-3">
+                <div id="statusBadge" class="flex items-center space-x-2 bg-slate-800/80 px-3 py-1.5 rounded-full border border-slate-700 text-xs font-medium">
+                    <span id="statusDot" class="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse"></span>
+                    <span id="statusText">Отключено</span>
+                </div>
+
+                <!-- Simulation Toggle -->
+                <button id="simToggleBtn" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-2 rounded-xl text-xs font-medium border border-slate-700 transition flex items-center space-x-1.5">
+                    <i class="fa-solid fa-flask"></i>
+                    <span>Симуляция</span>
+                </button>
+
+                <!-- Connect Button -->
+                <button id="connectBtn" class="bg-green-600 hover:bg-green-500 text-black font-semibold px-4 py-2 rounded-xl text-xs sm:text-sm transition flex items-center space-x-2 shadow-lg shadow-green-900/20">
+                    <i class="fa-brands fa-bluetooth-b"></i>
+                    <span id="connectBtnText">Подключить BLE</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Grid -->
+    <main class="max-w-7xl w-full mx-auto p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-3 gap-6 flex-grow">
+        
+        <!-- Left 2 Columns: Dashboard Gauges & Cards -->
+        <div class="lg:col-span-2 space-y-6">
+            
+            <!-- Primary Speed & RPM Centerpiece -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                
+                <!-- Speed Card -->
+                <div class="bg-carPanel/60 backdrop-blur border border-slate-800/80 rounded-3xl p-6 flex flex-col justify-between shadow-xl relative overflow-hidden group">
+                    <div class="absolute -right-8 -top-8 w-32 h-32 bg-green-500/5 rounded-full blur-2xl group-hover:bg-green-500/10 transition"></div>
+                    <div class="flex justify-between items-center z-10">
+                        <span class="text-sm font-semibold tracking-wider text-slate-400 uppercase">Скорость</span>
+                        <div class="p-2 rounded-xl bg-slate-800/80 text-green-400 border border-slate-700/50">
+                            <i class="fa-solid fa-gauge"></i>
+                        </div>
+                    </div>
+                    <div class="my-6 text-center z-10">
+                        <div class="flex items-baseline justify-center">
+                            <span id="speedValue" class="text-6xl sm:text-7xl font-extrabold font-mono-custom tracking-tight text-white">0</span>
+                            <span class="ml-2 text-xl font-medium text-slate-400">km/h</span>
+                        </div>
+                    </div>
+                    <div class="w-full bg-slate-800/80 rounded-full h-2 overflow-hidden z-10">
+                        <div id="speedBar" class="bg-gradient-to-r from-green-500 to-emerald-400 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <!-- RPM Card -->
+                <div class="bg-carPanel/60 backdrop-blur border border-slate-800/80 rounded-3xl p-6 flex flex-col justify-between shadow-xl relative overflow-hidden group">
+                    <div class="absolute -right-8 -top-8 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl group-hover:bg-emerald-500/10 transition"></div>
+                    <div class="flex justify-between items-center z-10">
+                        <span class="text-sm font-semibold tracking-wider text-slate-400 uppercase">Обороты двигателя</span>
+                        <div class="p-2 rounded-xl bg-slate-800/80 text-emerald-400 border border-slate-700/50">
+                            <i class="fa-solid fa-rotate"></i>
+                        </div>
+                    </div>
+                    <div class="my-6 text-center z-10">
+                        <div class="flex items-baseline justify-center">
+                            <span id="rpmValue" class="text-6xl sm:text-7xl font-extrabold font-mono-custom tracking-tight text-white">0</span>
+                            <span class="ml-2 text-xl font-medium text-slate-400">RPM</span>
+                        </div>
+                    </div>
+                    <div class="w-full bg-slate-800/80 rounded-full h-2 overflow-hidden z-10">
+                        <div id="rpmBar" class="bg-gradient-to-r from-emerald-500 to-cyan-400 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Secondary Metrics Grid -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                
+                <!-- Coolant Temp -->
+                <div class="bg-carPanel/60 backdrop-blur border border-slate-800/80 rounded-2xl p-5 flex flex-col justify-between shadow-lg">
+                    <div class="flex justify-between items-center text-slate-400">
+                        <span class="text-xs uppercase font-semibold">Темп. ОЖ</span>
+                        <i class="fa-solid fa-temperature-three-quarters text-amber-400"></i>
+                    </div>
+                    <div class="my-3">
+                        <div class="flex items-baseline">
+                            <span id="tempValue" class="text-3xl font-bold font-mono-custom text-white">--</span>
+                            <span class="ml-1 text-sm text-slate-400">°C</span>
+                        </div>
+                    </div>
+                    <div class="text-xs text-slate-500 flex justify-between">
+                        <span>Норма: 80-95°C</span>
+                        <span id="tempStatus" class="text-slate-400">Ожидание</span>
+                    </div>
+                </div>
+
+                <!-- Throttle Position -->
+                <div class="bg-carPanel/60 backdrop-blur border border-slate-800/80 rounded-2xl p-5 flex flex-col justify-between shadow-lg">
+                    <div class="flex justify-between items-center text-slate-400">
+                        <span class="text-xs uppercase font-semibold">Дроссель</span>
+                        <i class="fa-solid fa-sliders text-cyan-400"></i>
+                    </div>
+                    <div class="my-3">
+                        <div class="flex items-baseline">
+                            <span id="throttleValue" class="text-3xl font-bold font-mono-custom text-white">0</span>
+                            <span class="ml-1 text-sm text-slate-400">%</span>
+                        </div>
+                    </div>
+                    <div class="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                        <div id="throttleBar" class="bg-cyan-400 h-1.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <!-- Battery Voltage -->
+                <div class="bg-carPanel/60 backdrop-blur border border-slate-800/80 rounded-2xl p-5 flex flex-col justify-between shadow-lg">
+                    <div class="flex justify-between items-center text-slate-400">
+                        <span class="text-xs uppercase font-semibold">Напряжение сети</span>
+                        <i class="fa-solid fa-car-battery text-green-400"></i>
+                    </div>
+                    <div class="my-3">
+                        <div class="flex items-baseline">
+                            <span id="voltageValue" class="text-3xl font-bold font-mono-custom text-white">12.6</span>
+                            <span class="ml-1 text-sm text-slate-400">V</span>
+                        </div>
+                    </div>
+                    <div class="text-xs text-slate-500 flex justify-between">
+                        <span>Бортовая сеть</span>
+                        <span class="text-green-400 font-medium">OK</span>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Automated Polling Controls -->
+            <div class="bg-carPanel/60 backdrop-blur border border-slate-800/80 rounded-2xl p-5 flex flex-wrap items-center justify-between gap-4 shadow-lg">
+                <div class="flex items-center space-x-3">
+                    <div class="p-2 rounded-xl bg-green-500/10 text-green-400 border border-green-500/20">
+                        <i class="fa-solid fa-rotate-right"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-semibold text-white">Опрос датчиков (Live Polling)</h3>
+                        <p class="text-xs text-slate-400">Автоматический запрос RPM, Скорости и Температуры</p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <select id="pollInterval" class="bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded-xl px-3 py-2 outline-none focus:border-green-500">
+                        <option value="500">Каждые 0.5 сек</option>
+                        <option value="1000" selected>Каждую 1 сек</option>
+                        <option value="2000">Каждые 2 сек</option>
+                    </select>
+                    <button id="togglePollBtn" disabled class="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-4 py-2 rounded-xl text-xs font-semibold transition flex items-center space-x-1.5 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <i id="pollIcon" class="fa-solid fa-play text-green-400"></i>
+                        <span id="pollText">Запустить опрос</span>
+                    </button>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Right Column: AT Command Terminal & Log -->
+        <div class="bg-carPanel/60 backdrop-blur border border-slate-800/80 rounded-3xl p-5 flex flex-col justify-between shadow-xl h-[550px] lg:h-auto">
+            <div>
+                <div class="flex items-center justify-between pb-4 border-b border-slate-800">
+                    <div class="flex items-center space-x-2">
+                        <i class="fa-solid fa-terminal text-green-400"></i>
+                        <h2 class="font-semibold text-sm tracking-wide text-white">Терминал ELM327</h2>
+                    </div>
+                    <button id="clearLogBtn" class="text-xs text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded-lg border border-slate-700 transition">
+                        Очистить
+                    </button>
+                </div>
+
+                <!-- Quick Command Buttons -->
+                <div class="py-3 grid grid-cols-3 gap-2">
+                    <button class="quick-cmd bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-mono py-1.5 px-2 rounded-xl transition" data-cmd="ATZ\r">ATZ (Сброс)</button>
+                    <button class="quick-cmd bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-mono py-1.5 px-2 rounded-xl transition" data-cmd="ATI\r">ATI (Версия)</button>
+                    <button class="quick-cmd bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-mono py-1.5 px-2 rounded-xl transition" data-cmd="010C\r">010C (RPM)</button>
+                    <button class="quick-cmd bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-mono py-1.5 px-2 rounded-xl transition" data-cmd="010D\r">010D (Скорость)</button>
+                    <button class="quick-cmd bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-mono py-1.5 px-2 rounded-xl transition" data-cmd="0105\r">0105 (Темп. ОЖ)</button>
+                    <button class="quick-cmd bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-mono py-1.5 px-2 rounded-xl transition" data-cmd="0101\r">0101 (Статус DTC)</button>
+                </div>
+            </div>
+
+            <!-- Terminal Output Window -->
+            <div id="terminalOutput" class="my-2 bg-[#0b0f19] border border-slate-800 rounded-2xl p-3 font-mono-custom text-xs overflow-y-auto flex-grow h-48 sm:h-64 space-y-1.5 select-text">
+                <div class="text-slate-500">// Терминал готов к работе. Подключите устройство или включите симуляцию.</div>
+            </div>
+
+            <!-- Command Input Form -->
+            <form id="cmdForm" class="mt-3 flex gap-2">
+                <input type="text" id="cmdInput" placeholder="Введите AT или OBD команду (напр. 010C)..." class="flex-grow bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono-custom text-white placeholder-slate-500 focus:outline-none focus:border-green-500">
+                <button type="submit" class="bg-green-600 hover:bg-green-500 text-black px-4 py-2 rounded-xl text-xs font-bold transition shadow-md shadow-green-900/20">
+                    <i class="fa-solid fa-paper-plane"></i>
+                </button>
+            </form>
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="py-4 text-center text-xs text-slate-500 border-t border-slate-800 bg-carPanel/40">
+        OBD2 Web Assistant &bull; Работает через Web Bluetooth API или в режиме симуляции
+    </footer>
+
+    <!-- Custom Modal for Notifications / Alerts (No alert() used) -->
+    <div id="customModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center hidden">
+        <div class="bg-carPanel border border-slate-700 rounded-3xl p-6 max-w-sm w-full mx-4 shadow-2xl">
+            <h3 id="modalTitle" class="text-lg font-bold text-white mb-2">Сообщение</h3>
+            <p id="modalMessage" class="text-sm text-slate-300 mb-6">Текст сообщения</p>
+            <button id="modalCloseBtn" class="w-full bg-green-600 hover:bg-green-500 text-black font-semibold py-2.5 rounded-xl text-sm transition">
+                Понятно
+            </button>
+        </div>
+    </div>
+
+    <!-- Application Script Logic -->
+    <script>
+        // DOM Elements
+        const connectBtn = document.getElementById('connectBtn');
+        const connectBtnText = document.getElementById('connectBtnText');
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+        const simToggleBtn = document.getElementById('simToggleBtn');
+        const terminalOutput = document.getElementById('terminalOutput');
+        const cmdForm = document.getElementById('cmdForm');
+        const cmdInput = document.getElementById('cmdInput');
+        const clearLogBtn = document.getElementById('clearLogBtn');
+        const togglePollBtn = document.getElementById('togglePollBtn');
+        const pollIcon = document.getElementById('pollIcon');
+        const pollText = document.getElementById('pollText');
+        const pollIntervalSelect = document.getElementById('pollInterval');
+
+        // Dashboard Elements
+        const speedValue = document.getElementById('speedValue');
+        const speedBar = document.getElementById('speedBar');
+        const rpmValue = document.getElementById('rpmValue');
+        const rpmBar = document.getElementById('rpmBar');
+        const tempValue = document.getElementById('tempValue');
+        const tempStatus = document.getElementById('tempStatus');
+        const throttleValue = document.getElementById('throttleValue');
+        const throttleBar = document.getElementById('throttleBar');
+        const voltageValue = document.getElementById('voltageValue');
+
+        // Modal Elements
+        const customModal = document.getElementById('customModal');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalMessage = document.getElementById('modalMessage');
+        const modalCloseBtn = document.getElementById('modalCloseBtn');
+
+        function showModal(title, msg) {
+            modalTitle.textContent = title;
+            modalMessage.textContent = msg;
+            customModal.classList.remove('hidden');
+        }
+        modalCloseBtn.addEventListener('click', () => customModal.classList.add('hidden'));
+
+        // Bluetooth variables
+        let bluetoothDevice = null;
+        let rxCharacteristic = null;
+        let txCharacteristic = null;
+        let isConnected = false;
+        let isSimulation = false;
+        let pollingTimer = null;
+        let isPolling = false;
+
+        // Standard BLE UART Service UUID for ELM327 BLE adapters
+        const UART_SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
+        const UART_RX_UUID      = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"; // Write to adapter
+        const UART_TX_UUID      = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"; // Read from adapter
+
+        function logToTerminal(text, type = 'normal') {
+            const div = document.createElement('div');
+            const time = new Date().toLocaleTimeString();
+            let colorClass = 'text-slate-300';
+            if (type === 'sent') colorClass = 'text-cyan-400 font-semibold';
+            if (type === 'received') colorClass = 'text-green-400 font-semibold';
+            if (type === 'error') colorClass = 'text-rose-400 font-semibold';
+            if (type === 'system') colorClass = 'text-amber-400 italic';
+
+            div.className = `${colorClass} leading-relaxed`;
+            div.innerHTML = `<span class="text-slate-600 text-[10px] mr-2">[${time}]</span>${text}`;
+            terminalOutput.appendChild(div);
+            terminalOutput.scrollTop = terminalOutput.scrollHeight;
+        }
+
+        clearLogBtn.addEventListener('click', () => {
+            terminalOutput.innerHTML = '<div class="text-slate-500">// Терминал очищен.</div>';
+        });
+
+        // Toggle Simulation Mode
+        simToggleBtn.addEventListener('click', () => {
+            if (isConnected && !isSimulation) {
+                showModal('Внимание', 'Сначала отключите реальное Bluetooth-устройство.');
+                return;
+            }
+            isSimulation = !isSimulation;
+            if (isSimulation) {
+                isSimulationActive(true);
+                logToTerminal('Включен симулятор ELM327. Данные генерируются программно.', 'system');
+            } else {
+                isSimulationActive(false);
+                logToTerminal('Симулятор отключен.', 'system');
+            }
+        });
+
+        function isSimulationActive(active) {
+            if (active) {
+                isConnected = true;
+                simToggleBtn.classList.remove('bg-slate-800', 'text-slate-300');
+                simToggleBtn.classList.add('bg-amber-500/20', 'text-amber-400', 'border-amber-500/50');
+                statusDot.className = 'w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse';
+                statusText.textContent = 'Симуляция активна';
+                connectBtnText.textContent = 'Подключено (Симулятор)';
+                connectBtn.disabled = true;
+                connectBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                togglePollBtn.disabled = false;
+            } else {
+                isConnected = false;
+                simToggleBtn.classList.remove('bg-amber-500/20', 'text-amber-400', 'border-amber-500/50');
+                simToggleBtn.classList.add('bg-slate-800', 'text-slate-300');
+                statusDot.className = 'w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse';
+                statusText.textContent = 'Отключено';
+                connectBtnText.textContent = 'Подключить BLE';
+                connectBtn.disabled = false;
+                connectBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                togglePollBtn.disabled = true;
+                stopPolling();
+            }
+        }
+
+        // Web Bluetooth Connection
+        connectBtn.addEventListener('click', async () => {
+            if (isSimulation) return;
+
+            if (isConnected) {
+                disconnectBluetooth();
+                return;
+            }
+
+            try {
+                if (!navigator.bluetooth) {
+                    showModal('Не поддерживается', 'Ваш браузер не поддерживает Web Bluetooth API. Попробуйте Google Chrome на Android или ПК.');
+                    return;
+                }
+
+                logToTerminal('Запрос Bluetooth устройства...', 'system');
+                bluetoothDevice = await navigator.bluetooth.requestDevice({
+                    filters: [
+                        { namePrefix: 'OBD' },
+                        { namePrefix: 'ELM' },
+                        { namePrefix: 'V-Link' },
+                        { namePrefix: 'Car' }
+                    ],
+                    optionalServices: [UART_SERVICE_UUID]
+                });
+
+                bluetoothDevice.addEventListener('gattserverdisconnected', onDisconnected);
+
+                logToTimestamp = `Подключение к ${bluetoothDevice.name}...`;
+                logToTerminal(logToTimestamp, 'system');
+
+                const server = await bluetoothDevice.gatt.connect();
+                const service = await server.getPrimaryService(UART_SERVICE_UUID);
+                
+                rxCharacteristic = await service.getCharacteristic(UART_RX_UUID);
+                txCharacteristic = await service.getCharacteristic(UART_TX_UUID);
+
+                await txCharacteristic.startNotifications();
+                txCharacteristic.addEventListener('characteristicvaluechanged', handleIncomingData);
+
+                isConnected = true;
+                statusDot.className = 'w-2.5 h-2.5 rounded-full bg-green-500';
+                statusText.textContent = 'Подключено';
+                connectBtnText.textContent = 'Отключить';
+                connectBtn.classList.remove('bg-green-600', 'hover:bg-green-500');
+                connectBtn.classList.add('bg-rose-600', 'hover:bg-rose-500', 'text-white');
+                togglePollBtn.disabled = false;
+
+                logToTerminal('Успешно подключено к ELM327 BLE!', 'received');
+                
+                // Init ELM
+                await sendCommandDirect("ATZ\r");
+            } catch (error) {
+                console.error(error);
+                logToTerminal('Ошибка подключения: ' + error.message, 'error');
+                showModal('Ошибка подключения', error.message);
+            }
+        });
+
+        function disconnectBluetooth() {
+            if (bluetoothDevice && bluetoothDevice.gatt.connected) {
+                bluetoothDevice.gatt.disconnect();
+            }
+            onDisconnected();
+        }
+
+        function onDisconnected() {
+            isConnected = false;
+            stopPolling();
+            statusDot.className = 'w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse';
+            statusText.textContent = 'Отключено';
+            connectBtnText.textContent = 'Подключить BLE';
+            connectBtn.classList.remove('bg-rose-600', 'hover:bg-rose-500', 'text-white');
+            connectBtn.classList.add('bg-green-600', 'hover:bg-green-500', 'text-black');
+            togglePollBtn.disabled = true;
+            logToTerminal('Устройство отключено.', 'system');
+        }
+
+        // Incoming BLE Data
+        function handleIncomingData(event) {
+            const value = new TextDecoder().decode(event.target.value);
+            parseAndDisplayResponse(value);
+        }
+
+        async function sendCommandDirect(cmd) {
+            if (isSimulation) {
+                simulateCommandResponse(cmd);
+                return;
+            }
+            if (!rxCharacteristic) {
+                showModal('Ошибка', 'Нет соединения с адаптером.');
+                return;
+            }
+            const encoder = new TextEncoder();
+            await rxCharacteristic.writeValue(encoder.encode(cmd));
+            logToTerminal(`> ${cmd.trim()}`, 'sent');
+        }
+
+        // Terminal Command Form Submission
+        cmdForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            let val = cmdInput.value.trim();
+            if (!val) return;
+            if (!val.endsWith('\r') && !val.endsWith('\n')) {
+                val += '\r';
+            }
+            sendCommandDirect(val);
+            cmdInput.value = '';
+        });
+
+        // Quick Command Buttons
+        document.querySelectorAll('.quick-cmd').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const cmd = btn.getAttribute('data-cmd');
+                sendCommandDirect(cmd);
+            });
+        });
+
+        // Simulation Data Generator
+        let simSpeed = 45;
+        let simRpm = 2100;
+        let simTemp = 88;
+        let simThrottle = 22;
+
+        function simulateCommandResponse(cmd) {
+            logToTerminal(`> ${cmd.trim()}`, 'sent');
+            setTimeout(() => {
+                let response = "OK\r\n>";
+                const cleanCmd = cmd.trim().toUpperCase();
+                if (cleanCmd.includes("ATZ")) {
+                    response = "ELM327 v1.5\r\n>";
+                } else if (cleanCmd.includes("ATI")) {
+                    response = "OBDII to UART v2.1\r\n>";
+                } else if (cleanCmd.includes("010C")) { // RPM
+                    simRpm = Math.floor(1500 + Math.sin(Date.now()/1000)*800);
+                    let hex = (simRpm * 4).toString(16).toUpperCase().padStart(4, '0');
+                    response = `41 0C ${hex.substring(0,2)} ${hex.substring(2,4)}\r\n>`;
+                    updateDashboardData(null, simRpm, null, null);
+                } else if (cleanCmd.includes("010D")) { // Speed
+                    simSpeed = Math.max(0, Math.floor(50 + Math.cos(Date.now()/1000)*30));
+                    let hex = simSpeed.toString(16).toUpperCase().padStart(2, '0');
+                    response = `41 0D ${hex}\r\n>`;
+                    updateDashboardData(simSpeed, null, null, null);
+                } else if (cleanCmd.includes("0105")) { // Temp
+                    let hex = (simTemp + 40).toString(16).toUpperCase().padStart(2, '0');
+                    response = `41 05 ${hex}\r\n>`;
+                    updateDashboardData(null, null, simTemp, null);
+                } else if (cleanCmd.includes("0111")) { // Throttle
+                    let hex = Math.floor(simThrottle * 2.55).toString(16).toUpperCase().padStart(2, '0');
+                    response = `41 11 ${hex}\r\n>`;
+                }
+                logToTerminal(response.trim(), 'received');
+            }, 150);
+        }
+
+        function parseAndDisplayResponse(data) {
+            logToTerminal(data.trim(), 'received');
+            // Basic parsing logic for OBD-II Mode 1 responses
+            if (data.includes('41 0C')) {
+                // RPM formula: ((A*256)+B)/4
+                const parts = data.trim().split(/\s+/);
+                const idx = parts.indexOf('0C');
+                if (idx !== -1 && parts.length > idx + 2) {
+                    const A = parseInt(parts[idx+1], 16);
+                    const B = parseInt(parts[idx+2], 16);
+                    const rpm = Math.round(((A * 256) + B) / 4);
+                    updateDashboardData(null, rpm, null, null);
+                }
+            } else if (data.includes('41 0D')) {
+                // Speed formula: A
+                const parts = data.trim().split(/\s+/);
+                const idx = parts.indexOf('0D');
+                if (idx !== -1 && parts.length > idx + 1) {
+                    const speed = parseInt(parts[idx+1], 16);
+                    updateDashboardData(speed, null, null, null);
+                }
+            } else if (data.includes('41 05')) {
+                // Coolant Temp formula: A - 40
+                const parts = data.trim().split(/\s+/);
+                const idx = parts.indexOf('05');
+                if (idx !== -1 && parts.length > idx + 1) {
+                    const temp = parseInt(parts[idx+1], 16) - 40;
+                    updateDashboardData(null, null, temp, null);
+                }
+            }
+        }
+
+        function updateDashboardData(spd, rpm, tmp, thr) {
+            if (spd !== null && spd !== undefined) {
+                speedValue.textContent = spd;
+                speedBar.style.width = Math.min(100, (spd / 220) * 100) + '%';
+            }
+            if (rpm !== null && rpm !== undefined) {
+                rpmValue.textContent = rpm;
+                rpmBar.style.width = Math.min(100, (rpm / 8000) * 100) + '%';
+            }
+            if (tmp !== null && tmp !== undefined) {
+                tempValue.textContent = tmp;
+                if (tmp < 75) {
+                    tempStatus.textContent = 'Прогрев';
+                    tempStatus.className = 'text-cyan-400';
+                } else if (tmp <= 100) {
+                    tempStatus.textContent = 'Норма';
+                    tempStatus.className = 'text-green-400';
+                } else {
+                    tempStatus.textContent = 'Перегрев!';
+                    tempStatus.className = 'text-rose-400 font-bold';
+                }
+            }
+        }
+
+        // Automated Polling Loop
+        togglePollBtn.addEventListener('click', () => {
+            if (isPolling) {
+                stopPolling();
+            } else {
+                startPolling();
+            }
+        });
+
+        function startPolling() {
+            if (!isConnected) return;
+            isPolling = true;
+            pollIcon.className = "fa-solid fa-stop text-rose-400";
+            pollText.textContent = "Остановить опрос";
+            
+            const intervalMs = parseInt(pollIntervalSelect.value);
+            pollingTimer = setInterval(async () => {
+                if (!isConnected) {
+                    stopPolling();
+                    return;
+                }
+                // Send RPM and Speed requests sequentially
+                await sendCommandDirect("010C\r");
+                setTimeout(async () => {
+                    if (isConnected) await sendCommandDirect("010D\r");
+                }, 150);
+                setTimeout(async () => {
+                    if (isConnected) await sendCommandDirect("0105\r");
+                }, 300);
+            }, intervalMs);
+        }
+
+        function stopPolling() {
+            isPolling = false;
+            if (pollingTimer) clearInterval(pollingTimer);
+            pollIcon.className = "fa-solid fa-play text-green-400";
+            pollText.textContent = "Запустить опрос датчиков";
+        }
+    </script>
+</body>
+</html>
